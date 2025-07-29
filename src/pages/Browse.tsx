@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Navbar } from "@/components/Navbar";
 import { TradeCard } from "@/components/TradeCard";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Filter, Search, SlidersHorizontal } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const allTrades = [
   {
@@ -84,6 +85,50 @@ export default function Browse() {
   const [selectedCategory, setSelectedCategory] = useState("All Categories");
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedCondition, setSelectedCondition] = useState("Any Condition");
+  const [sortBy, setSortBy] = useState("Newest First");
+  const [location, setLocation] = useState("");
+  const [distance, setDistance] = useState("50");
+  const [timePosted, setTimePosted] = useState("anytime");
+  const { toast } = useToast();
+
+  // Filter and sort trades based on current selections
+  const filteredTrades = useMemo(() => {
+    let filtered = allTrades.filter(trade => {
+      // Category filter
+      if (selectedCategory !== "All Categories") {
+        // Simple category matching - in a real app, trades would have category field
+        return true; // For demo, showing all trades
+      }
+      
+      // Search filter
+      if (searchQuery) {
+        return trade.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+               trade.wantedItems.some(item => item.toLowerCase().includes(searchQuery.toLowerCase()));
+      }
+      
+      return true;
+    });
+
+    // Sort trades
+    switch (sortBy) {
+      case "Most Liked":
+        return filtered.sort((a, b) => (b.liked ? 1 : 0) - (a.liked ? 1 : 0));
+      case "Closest Match":
+        return filtered.sort((a, b) => a.title.localeCompare(b.title));
+      case "Recently Updated":
+        return filtered.reverse();
+      default: // "Newest First"
+        return filtered;
+    }
+  }, [selectedCategory, searchQuery, sortBy]);
+
+  const handleLoadMore = () => {
+    toast({
+      title: "Loading more trades...",
+      description: "Fetching additional trades from the network.",
+    });
+  };
 
   return (
     <div className="bg-background">
@@ -139,7 +184,7 @@ export default function Browse() {
             </Button>
 
             <div className="flex gap-4 w-full sm:w-auto">
-              <Select defaultValue="Any Condition">
+              <Select value={selectedCondition} onValueChange={setSelectedCondition}>
                 <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue placeholder="Condition" />
                 </SelectTrigger>
@@ -152,7 +197,7 @@ export default function Browse() {
                 </SelectContent>
               </Select>
 
-              <Select defaultValue="Newest First">
+              <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
@@ -175,13 +220,17 @@ export default function Browse() {
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Location
                   </label>
-                  <Input placeholder="City, State or ZIP" />
+                  <Input 
+                    placeholder="City, State or ZIP" 
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Distance
                   </label>
-                  <Select defaultValue="50">
+                  <Select value={distance} onValueChange={setDistance}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -198,7 +247,7 @@ export default function Browse() {
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Posted
                   </label>
-                  <Select defaultValue="anytime">
+                  <Select value={timePosted} onValueChange={setTimePosted}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -218,20 +267,26 @@ export default function Browse() {
         {/* Results count */}
         <div className="mb-6">
           <p className="text-muted-foreground">
-            Showing {allTrades.length} trades {selectedCategory !== "All Categories" && `in ${selectedCategory}`}
+            Showing {filteredTrades.length} trades {selectedCategory !== "All Categories" && `in ${selectedCategory}`}
+            {searchQuery && ` matching "${searchQuery}"`}
           </p>
         </div>
 
         {/* Trade grid */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {allTrades.map((trade, index) => (
+          {filteredTrades.map((trade, index) => (
             <TradeCard key={index} {...trade} />
           ))}
         </div>
 
         {/* Load more */}
         <div className="text-center mt-12">
-          <Button variant="outline" size="lg" className="hover:bg-primary hover:text-primary-foreground">
+          <Button 
+            variant="outline" 
+            size="lg" 
+            className="hover:bg-primary hover:text-primary-foreground"
+            onClick={handleLoadMore}
+          >
             Load More Trades
           </Button>
         </div>

@@ -1,6 +1,8 @@
 import { Heart, MapPin, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 interface TradeCardProps {
   image: string;
@@ -23,6 +25,23 @@ export const TradeCard = ({
   timeAgo,
   liked = false
 }: TradeCardProps) => {
+  const [isLiked, setIsLiked] = useState(liked);
+  const { toast } = useToast();
+
+  const handleLike = () => {
+    setIsLiked(!isLiked);
+    toast({
+      title: isLiked ? "Removed from favorites" : "Added to favorites",
+      description: isLiked ? `${title} removed from your favorites` : `${title} added to your favorites`,
+    });
+  };
+
+  const handleViewTrade = () => {
+    toast({
+      title: "Opening trade details",
+      description: `Loading details for ${title}`,
+    });
+  };
   return (
     <div className="bg-card rounded-xl shadow-soft hover:shadow-medium transition-smooth border border-border overflow-hidden group">
       {/* Image */}
@@ -37,8 +56,9 @@ export const TradeCard = ({
             variant="ghost"
             size="icon"
             className="bg-background/80 backdrop-blur-sm hover:bg-background"
+            onClick={handleLike}
           >
-            <Heart className={`h-4 w-4 ${liked ? 'fill-red-500 text-red-500' : 'text-muted-foreground'}`} />
+            <Heart className={`h-4 w-4 transition-colors ${isLiked ? 'fill-red-500 text-red-500' : 'text-muted-foreground hover:text-red-500'}`} />
           </Button>
         </div>
         <Badge className="absolute top-3 left-3 bg-primary text-primary-foreground">
@@ -84,7 +104,12 @@ export const TradeCard = ({
             <Clock className="h-3 w-3 mr-1" />
             {timeAgo}
           </div>
-          <Button size="sm" variant="outline" className="hover:bg-primary hover:text-primary-foreground">
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="hover:bg-primary hover:text-primary-foreground"
+            onClick={handleViewTrade}
+          >
             View Trade
           </Button>
         </div>
