@@ -105,7 +105,7 @@ export default function Favorites() {
           </div>
         </div>
 
-                {/* Favorites Grid */}
+        {/* Favorites Grid */}
         {favorites.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {favorites.map((item) => (
@@ -142,7 +142,7 @@ export default function Favorites() {
               </Link>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
