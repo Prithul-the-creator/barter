@@ -1,82 +1,23 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { TradeCard } from "@/components/TradeCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Filter, Search, SlidersHorizontal } from "lucide-react";
+import { Filter, Search, SlidersHorizontal, Plus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "react-router-dom";
+import { itemsApi, categoriesApi } from "@/lib/api";
+import { ItemWithDetails } from "@/types/database";
+import { supabase } from "@/lib/supabase";
 
-const allTrades = [
-  {
-    image: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=400&h=300&fit=crop",
-    title: "MacBook Pro 2021 16-inch M1 Pro",
-    condition: "Excellent",
-    ownerName: "Sarah Chen",
-    location: "San Francisco, CA",
-    wantedItems: ["Gaming PC", "Photography Equipment", "Musical Instruments"],
-    timeAgo: "2 hours ago",
-    liked: true
-  },
-  {
-    image: "https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=400&h=300&fit=crop",
-    title: "Vintage Canon AE-1 Film Camera",
-    condition: "Good",
-    ownerName: "Mike Rodriguez",
-    location: "Austin, TX",
-    wantedItems: ["Bicycle", "Books", "Art Supplies"],
-    timeAgo: "5 hours ago"
-  },
-  {
-    image: "https://images.unsplash.com/photo-1571068316344-75bc76f77890?w=400&h=300&fit=crop",
-    title: "Trek Mountain Bike 2022",
-    condition: "Like New",
-    ownerName: "Emma Wilson",
-    location: "Denver, CO",
-    wantedItems: ["Laptop", "Fitness Equipment", "Tools"],
-    timeAgo: "1 day ago"
-  },
-  {
-    image: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400&h=300&fit=crop",
-    title: "Complete Home Office Setup",
-    condition: "Excellent",
-    ownerName: "David Kim",
-    location: "Seattle, WA",
-    wantedItems: ["Travel Gear", "Kitchen Appliances", "Outdoor Equipment"],
-    timeAgo: "3 days ago",
-    liked: true
-  },
-  {
-    image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=300&fit=crop",
-    title: "Nike Air Jordan Retro Collection",
-    condition: "Good",
-    ownerName: "Alex Thompson",
-    location: "Chicago, IL",
-    wantedItems: ["Tech Gadgets", "Books", "Sports Equipment"],
-    timeAgo: "1 week ago"
-  },
-  {
-    image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=300&fit=crop",
-    title: "Vintage Vinyl Record Collection",
-    condition: "Excellent",
-    ownerName: "Lisa Martinez",
-    location: "Nashville, TN",
-    wantedItems: ["Musical Instruments", "Audio Equipment", "Books"],
-    timeAgo: "2 days ago"
-  }
-];
-
-const categories = [
-  "All Categories",
-  "Electronics",
-  "Sports & Outdoors",
-  "Fashion",
-  "Books & Media",
-  "Home & Garden",
-  "Automotive",
-  "Collectibles"
-];
+interface Category {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+}
 
 const conditions = ["Any Condition", "Excellent", "Good", "Fair"];
 const sortOptions = ["Newest First", "Most Liked", "Closest Match", "Recently Updated"];
@@ -90,38 +31,88 @@ export default function Browse() {
   const [location, setLocation] = useState("");
   const [distance, setDistance] = useState("50");
   const [timePosted, setTimePosted] = useState("anytime");
+  const [items, setItems] = useState<ItemWithDetails[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Filter and sort trades based on current selections
-  const filteredTrades = useMemo(() => {
-    let filtered = allTrades.filter(trade => {
+  // Load items and categories on component mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        
+        // Load categories
+        const categoriesData = await categoriesApi.getAll();
+        setCategories(categoriesData);
+        
+        // Load all active items
+        const itemsData = await itemsApi.getAll();
+        
+        // Filter out current user's items
+        const { data: { user } } = await supabase.auth.getUser();
+        const filteredItems = user 
+          ? itemsData.filter(item => item.user_id !== user.id)
+          : itemsData;
+        
+        setItems(filteredItems);
+        
+      } catch (err) {
+        console.error('Error loading data:', err);
+        setError('Failed to load items');
+        toast({
+          title: "Error",
+          description: "Failed to load items. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [toast]);
+
+  // Filter and sort items based on current selections
+  const filteredItems = useMemo(() => {
+    let filtered = items.filter(item => {
       // Category filter
       if (selectedCategory !== "All Categories") {
-        // Simple category matching - in a real app, trades would have category field
-        return true; // For demo, showing all trades
+        const category = categories.find(cat => cat.name === selectedCategory);
+        return category && item.category_id === category.id;
+      }
+      
+      // Condition filter
+      if (selectedCondition !== "Any Condition") {
+        return item.condition === selectedCondition;
       }
       
       // Search filter
       if (searchQuery) {
-        return trade.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-               trade.wantedItems.some(item => item.toLowerCase().includes(searchQuery.toLowerCase()));
+        const searchLower = searchQuery.toLowerCase();
+        return item.title.toLowerCase().includes(searchLower) ||
+               item.description.toLowerCase().includes(searchLower) ||
+               (item.wanted_items && item.wanted_items.some(wanted => 
+                 wanted.description.toLowerCase().includes(searchLower)
+               ));
       }
       
       return true;
     });
 
-    // Sort trades
-    switch (sortBy) {
-      case "Most Liked":
-        return filtered.sort((a, b) => (b.liked ? 1 : 0) - (a.liked ? 1 : 0));
-      case "Closest Match":
-        return filtered.sort((a, b) => a.title.localeCompare(b.title));
-      case "Recently Updated":
-        return filtered.reverse();
-      default: // "Newest First"
-        return filtered;
-    }
-  }, [selectedCategory, searchQuery, sortBy]);
+      // Sort items
+  switch (sortBy) {
+    case "Most Liked":
+      return filtered.sort((a, b) => (b.id.localeCompare(a.id))); // Fallback to ID for now
+    case "Closest Match":
+      return filtered.sort((a, b) => a.title.localeCompare(b.title));
+    case "Recently Updated":
+      return filtered.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+    default: // "Newest First"
+      return filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+}, [items, categories, selectedCategory, selectedCondition, searchQuery, sortBy]);
 
   const handleLoadMore = () => {
     toast({
@@ -160,14 +151,21 @@ export default function Browse() {
 
           {/* Category filters */}
           <div className="flex flex-wrap gap-2">
+            <Badge
+              variant={selectedCategory === "All Categories" ? "default" : "secondary"}
+              className="cursor-pointer hover:bg-primary hover:text-primary-foreground px-3 py-1"
+              onClick={() => setSelectedCategory("All Categories")}
+            >
+              All Categories
+            </Badge>
             {categories.map((category) => (
               <Badge
-                key={category}
-                variant={selectedCategory === category ? "default" : "secondary"}
+                key={category.id}
+                variant={selectedCategory === category.name ? "default" : "secondary"}
                 className="cursor-pointer hover:bg-primary hover:text-primary-foreground px-3 py-1"
-                onClick={() => setSelectedCategory(category)}
+                onClick={() => setSelectedCategory(category.name)}
               >
-                {category}
+                {category.name}
               </Badge>
             ))}
           </div>
@@ -264,20 +262,80 @@ export default function Browse() {
           )}
         </div>
 
+        {/* Loading state */}
+        {loading && (
+          <div className="text-center py-12">
+            <div className="flex items-center justify-center space-x-2">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <span>Loading items...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Error state */}
+        {error && !loading && (
+          <div className="text-center py-12">
+            <div className="max-w-md mx-auto">
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                Error loading items
+              </h3>
+              <p className="text-muted-foreground mb-6">{error}</p>
+              <Button onClick={() => window.location.reload()}>
+                Try Again
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Results count */}
-        <div className="mb-6">
-          <p className="text-muted-foreground">
-            Showing {filteredTrades.length} trades {selectedCategory !== "All Categories" && `in ${selectedCategory}`}
-            {searchQuery && ` matching "${searchQuery}"`}
-          </p>
-        </div>
+        {!loading && !error && (
+          <div className="mb-6">
+            <p className="text-muted-foreground">
+              Showing {filteredItems.length} items {selectedCategory !== "All Categories" && `in ${selectedCategory}`}
+              {searchQuery && ` matching "${searchQuery}"`}
+            </p>
+          </div>
+        )}
 
         {/* Trade grid */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredTrades.map((trade, index) => (
-            <TradeCard key={index} {...trade} />
-          ))}
-        </div>
+        {!loading && !error && filteredItems.length > 0 ? (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredItems.map((item) => (
+              <TradeCard 
+                key={item.id}
+                id={item.id}
+                image={item.images && item.images.length > 0 ? item.images[0].image_url : '/placeholder.svg'}
+                title={item.title}
+                condition={item.condition}
+                ownerName={item.profile?.full_name || item.profile?.username || 'Unknown User'}
+                location={item.location || 'Location not specified'}
+                wantedItems={item.wanted_items ? item.wanted_items.map(w => w.description) : []}
+                timeAgo={new Date(item.created_at).toLocaleDateString()}
+                liked={false}
+              />
+            ))}
+          </div>
+        ) : !loading && !error ? (
+          <div className="text-center py-12">
+            <div className="max-w-md mx-auto">
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                No items found
+              </h3>
+              <p className="text-muted-foreground mb-6">
+                {searchQuery || selectedCategory !== "All Categories" 
+                  ? "Try adjusting your search or filters to find more items."
+                  : "Be the first to list an item for trade!"
+                }
+              </p>
+              <Link to="/list-item">
+                <Button className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  List Your First Item
+                </Button>
+              </Link>
+            </div>
+          </div>
+        ) : null}
 
         {/* Load more */}
         <div className="text-center mt-12">

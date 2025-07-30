@@ -1,4 +1,4 @@
-import { Home, Search, Plus, MessageCircle, User } from "lucide-react";
+import { Home, Search, Plus, MessageCircle, User, Heart } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
@@ -7,6 +7,7 @@ const navItems = [
   { icon: Search, label: "Browse", path: "/browse" },
   { icon: Plus, label: "List", path: "/list-item", isPrimary: true },
   { icon: MessageCircle, label: "Messages", path: "/messages" },
+  { icon: Heart, label: "Favorites", path: "/favorites" },
   { icon: User, label: "Profile", path: "/profile" }
 ];
 
