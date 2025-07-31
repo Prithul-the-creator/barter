@@ -28,7 +28,8 @@ import {
 import { itemsApi } from "@/lib/api";
 import { ItemWithDetails } from "@/types/database";
 import { supabase } from "@/lib/supabase";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { checkAuthAndRedirect } from "@/lib/utils";
 
 interface UserProfile {
   id: string;
@@ -76,6 +77,17 @@ export default function Profile() {
   const [userItems, setUserItems] = useState<ItemWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  // Check authentication on component mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const isAuthenticated = await checkAuthAndRedirect(navigate);
+      if (!isAuthenticated) return;
+    };
+    
+    checkAuth();
+  }, [navigate]);
 
   // Load user data and items
   useEffect(() => {

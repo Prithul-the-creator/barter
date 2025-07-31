@@ -15,8 +15,9 @@ import { useToast } from "@/hooks/use-toast";
 import { chatApi } from "@/lib/api";
 import { ConversationWithDetails } from "@/types/database";
 import { Chat } from "@/components/Chat";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { checkAuthAndRedirect } from "@/lib/utils";
 
 export default function Messages() {
   const [conversations, setConversations] = useState<ConversationWithDetails[]>([]);
@@ -25,6 +26,17 @@ export default function Messages() {
   const [showChat, setShowChat] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const { toast } = useToast();
+  const navigate = useNavigate();
+
+  // Check authentication on component mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const isAuthenticated = await checkAuthAndRedirect(navigate);
+      if (!isAuthenticated) return;
+    };
+    
+    checkAuth();
+  }, [navigate]);
 
   // Get current user
   useEffect(() => {

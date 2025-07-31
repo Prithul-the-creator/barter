@@ -1,58 +1,52 @@
-import { Home, Search, Plus, MessageCircle, User, Heart } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { 
+  Home, 
+  Search, 
+  Plus, 
+  Heart,
+  Package,
+  MessageCircle,
+  User 
+} from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
-const navItems = [
-  { icon: Home, label: "Home", path: "/" },
-  { icon: Search, label: "Browse", path: "/browse" },
-  { icon: Plus, label: "List", path: "/list-item", isPrimary: true },
-  { icon: MessageCircle, label: "Messages", path: "/messages" },
-  { icon: Heart, label: "Favorites", path: "/favorites" },
-  { icon: User, label: "Profile", path: "/profile" }
-];
-
-export const MobileBottomNav = () => {
+export function MobileBottomNav() {
   const location = useLocation();
+  const { user } = useAuth();
+
+  const navItems = [
+    { href: "/", label: "Home", icon: Home },
+    { href: "/browse", label: "Browse", icon: Search },
+    ...(user ? [
+      { href: "/list-item", label: "List", icon: Plus },
+      { href: "/favorites", label: "Favorites", icon: Heart },
+      { href: "/offers", label: "Offers", icon: Package },
+      { href: "/messages", label: "Messages", icon: MessageCircle },
+      { href: "/profile", label: "Profile", icon: User },
+    ] : [])
+  ];
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border z-50">
-      <div className="flex items-center justify-around px-2 py-2">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = location.pathname === item.path;
-          
-          if (item.isPrimary) {
-            return (
-              <Link key={item.path} to={item.path}>
-                <Button
-                  variant="gradient"
-                  size="icon"
-                  className="h-12 w-12 rounded-full shadow-medium"
-                >
-                  <Icon className="h-6 w-6" />
-                </Button>
-              </Link>
-            );
-          }
-
-          return (
-            <Link key={item.path} to={item.path} className="flex flex-col items-center py-2 px-3 min-w-[60px]">
-              <Icon 
-                className={`h-6 w-6 mb-1 ${
-                  isActive ? 'text-primary' : 'text-muted-foreground'
-                }`} 
-              />
-              <span 
-                className={`text-xs ${
-                  isActive ? 'text-primary font-medium' : 'text-muted-foreground'
-                }`}
-              >
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
+    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t border-border z-50">
+      <div className="flex justify-around items-center h-16 px-2">
+        {navItems.map((item) => (
+          <Link key={item.href} to={item.href}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`flex flex-col items-center justify-center h-12 w-12 p-0 ${
+                location.pathname === item.href
+                  ? "text-primary"
+                  : "text-muted-foreground"
+              }`}
+            >
+              <item.icon className="h-5 w-5" />
+              <span className="text-xs mt-1">{item.label}</span>
+            </Button>
+          </Link>
+        ))}
       </div>
     </div>
   );
-};
+}

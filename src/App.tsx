@@ -16,6 +16,7 @@ import TradeDetail from "./pages/TradeDetail";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import Favorites from "./pages/Favorites";
+import Offers from "./pages/Offers";
 
 const queryClient = new QueryClient();
 
@@ -61,6 +62,11 @@ const App = () => {
                   <Route path="/favorites" element={
                     <ProtectedRoute>
                       <Favorites />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/offers" element={
+                    <ProtectedRoute>
+                      <Offers />
                     </ProtectedRoute>
                   } />
                   

@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { getRedirectPath, clearRedirectPath } from "@/lib/utils";
 
 export default function Login() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -44,7 +45,10 @@ export default function Login() {
         });
         
         if (!isSignUp) {
-          navigate("/");
+          // Check if there's a redirect path stored
+          const redirectPath = getRedirectPath();
+          clearRedirectPath(); // Clear the stored path
+          navigate(redirectPath);
         }
       }
     } catch (error) {

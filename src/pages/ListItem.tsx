@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { itemsApi, itemImagesApi, wantedItemsApi } from "@/lib/api";
 import { categoriesApi } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
+import { checkAuthAndRedirect } from "@/lib/utils";
 
 const categories = [
   "Electronics",
@@ -62,6 +63,16 @@ export default function ListItem() {
     allowShipping: false,
     openToOffers: true
   });
+
+  // Check authentication on component mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const isAuthenticated = await checkAuthAndRedirect(navigate);
+      if (!isAuthenticated) return;
+    };
+    
+    checkAuth();
+  }, [navigate]);
 
   // Load categories and existing item data on component mount
   useEffect(() => {

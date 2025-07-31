@@ -3,9 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { favoritesApi } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
+import { checkAuthAndRedirect } from "@/lib/utils";
 
 interface TradeCardProps {
   id: string;
@@ -34,6 +35,7 @@ export const TradeCard = ({
 }: TradeCardProps) => {
   const [isLiked, setIsLiked] = useState(liked);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   // Check if item is favorited on component mount
   useEffect(() => {
@@ -74,6 +76,10 @@ export const TradeCard = ({
     e.preventDefault();
     e.stopPropagation();
     e.nativeEvent.stopImmediatePropagation();
+    
+    // Check authentication before allowing like
+    const isAuthenticated = await checkAuthAndRedirect(navigate);
+    if (!isAuthenticated) return;
     
     try {
       if (isLiked) {

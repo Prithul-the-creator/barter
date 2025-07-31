@@ -11,7 +11,11 @@ import type {
   WantedItem,
   UserRating,
   Conversation,
-  ConversationWithDetails
+  ConversationWithDetails,
+  Offer,
+  OfferWithDetails,
+  OfferImage,
+  TradeMeeting
 } from '@/types/database'
 
 // ============================================================================
@@ -1226,3 +1230,444 @@ export const ratingsApi = {
     return data
   }
 } 
+
+// Offers API
+export const offersApi = {
+  // Create a new offer
+  async create(offerData: {
+    itemId: string;
+    sellerId: string;
+    offerMessage?: string;
+    offeredItems?: string[];
+  }): Promise<string | null> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { data, error } = await supabase
+        .from('offers')
+        .insert({
+          item_id: offerData.itemId,
+          buyer_id: user.id,
+          seller_id: offerData.sellerId,
+          offer_message: offerData.offerMessage || null,
+          offered_items: offerData.offeredItems || null,
+        })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+      return data?.id || null;
+    } catch (error) {
+      console.error('Error creating offer:', error);
+      return null;
+    }
+  },
+
+  // Get offers for a specific item
+  async getOffersForItem(itemId: string): Promise<OfferWithDetails[]> {
+    try {
+      const { data, error } = await supabase
+        .from('offers')
+        .select(`
+          *,
+          item:items(*),
+          buyer:profiles!offers_buyer_id_fkey(*),
+          seller:profiles!offers_seller_id_fkey(*)
+        `)
+        .eq('item_id', itemId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching offers:', error);
+      return [];
+    }
+  },
+
+  // Get offers sent by current user
+  async getSentOffers(): Promise<OfferWithDetails[]> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+
+      const { data, error } = await supabase
+        .from('offers')
+        .select(`
+          *,
+          item:items(*),
+          buyer:profiles!offers_buyer_id_fkey(*),
+          seller:profiles!offers_seller_id_fkey(*),
+          images:offer_images(*)
+        `)
+        .eq('buyer_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching sent offers:', error);
+      return [];
+    }
+  },
+
+  // Get offers received by current user (pending and accepted offers)
+  async getReceivedOffers(): Promise<OfferWithDetails[]> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+
+      const { data, error } = await supabase
+        .from('offers')
+        .select(`
+          *,
+          item:items(*),
+          buyer:profiles!offers_buyer_id_fkey(*),
+          seller:profiles!offers_seller_id_fkey(*),
+          images:offer_images(*)
+        `)
+        .eq('seller_id', user.id)
+        .in('status', ['pending', 'accepted'])
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching received offers:', error);
+      return [];
+    }
+  },
+
+  // Update offer status (accept/decline/withdraw)
+  async updateStatus(offerId: string, status: 'accepted' | 'declined' | 'withdrawn'): Promise<boolean> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      console.log(`Attempting to update offer ${offerId} to status ${status} for user ${user.id}`);
+
+      const { data, error } = await supabase
+        .from('offers')
+        .update({ 
+          status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', offerId)
+        .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
+        .select();
+
+      if (error) {
+        console.error('Error updating offer status:', error);
+        throw error;
+      }
+
+      console.log('Update result:', data);
+      return true;
+    } catch (error) {
+      console.error('Error updating offer status:', error);
+      return false;
+    }
+  },
+
+  // Check if user has already made an offer on this item
+  async hasUserOffered(itemId: string): Promise<boolean> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return false;
+
+      const { data, error } = await supabase
+        .from('offers')
+        .select('id')
+        .eq('item_id', itemId)
+        .eq('buyer_id', user.id)
+        .eq('status', 'pending')
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      return !!data;
+    } catch (error) {
+      console.error('Error checking if user has offered:', error);
+      return false;
+    }
+  }
+}; 
+
+// Offer Images API
+export const offerImagesApi = {
+  // Upload image for an offer
+  async uploadImage(offerId: string, file: File): Promise<boolean> {
+    try {
+      console.log('Starting offer image upload for offerId:', offerId);
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+      console.log('User authenticated:', user.id);
+
+      // Skip bucket existence check since we know it exists
+      console.log('Skipping bucket existence check - proceeding with upload');
+
+      // Generate unique filename
+      const fileExtension = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+      const filePath = `${offerId}/${fileName}`;
+      console.log('Generated file path:', filePath);
+
+      // Upload to storage
+      console.log('Uploading file to storage...');
+      const { error: uploadError } = await supabase.storage
+        .from('offer-images')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        console.error('Error uploading offer image:', uploadError);
+        return false;
+      }
+      console.log('File uploaded to storage successfully');
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('offer-images')
+        .getPublicUrl(filePath);
+      console.log('Public URL generated:', publicUrl);
+
+      // Check if offer_images table exists
+      console.log('Checking if offer_images table exists...');
+      const { data: tableCheck, error: tableError } = await supabase
+        .from('offer_images')
+        .select('id')
+        .limit(1);
+      
+      if (tableError) {
+        console.error('Error checking offer_images table:', tableError);
+        console.error('This suggests the table does not exist or RLS policies are blocking access');
+        return false;
+      }
+      console.log('offer_images table is accessible');
+
+      // Get current order index
+      const { data: existingImages, error: orderError } = await supabase
+        .from('offer_images')
+        .select('order_index')
+        .eq('offer_id', offerId)
+        .order('order_index', { ascending: false })
+        .limit(1);
+
+      if (orderError) {
+        console.error('Error getting existing images:', orderError);
+        return false;
+      }
+
+      const orderIndex = existingImages && existingImages.length > 0 
+        ? existingImages[0].order_index + 1 
+        : 0;
+      console.log('Order index:', orderIndex);
+
+      // Save to database
+      console.log('Saving image record to database...');
+      const { error: dbError } = await supabase
+        .from('offer_images')
+        .insert({
+          offer_id: offerId,
+          image_url: publicUrl,
+          filename: fileName,
+          order_index: orderIndex,
+        });
+
+      if (dbError) {
+        console.error('Error saving offer image to database:', dbError);
+        // Clean up uploaded file if database insert fails
+        await supabase.storage
+          .from('offer-images')
+          .remove([filePath]);
+        return false;
+      }
+
+      console.log('Offer image uploaded and saved successfully');
+      return true;
+    } catch (error) {
+      console.error('Error uploading offer image:', error);
+      return false;
+    }
+  },
+
+  // Get images for an offer
+  async getImages(offerId: string): Promise<OfferImage[]> {
+    try {
+      const { data, error } = await supabase
+        .from('offer_images')
+        .select('*')
+        .eq('offer_id', offerId)
+        .order('order_index', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching offer images:', error);
+      return [];
+    }
+  },
+
+  // Delete image from offer
+  async deleteImage(imageId: string): Promise<boolean> {
+    try {
+      // Get image details first
+      const { data: image, error: fetchError } = await supabase
+        .from('offer_images')
+        .select('*')
+        .eq('id', imageId)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching image details:', fetchError);
+        return false;
+      }
+
+      if (!image) {
+        console.error('Image not found:', imageId);
+        return false;
+      }
+
+      // Extract file path from URL
+      const urlParts = image.image_url.split('/');
+      const fileName = urlParts[urlParts.length - 1];
+      const offerId = image.offer_id;
+      const filePath = `${offerId}/${fileName}`;
+
+      // Delete from storage
+      const { error: storageError } = await supabase.storage
+        .from('offer-images')
+        .remove([filePath]);
+
+      if (storageError) {
+        console.error('Error deleting from storage:', storageError);
+      }
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from('offer_images')
+        .delete()
+        .eq('id', imageId);
+
+      if (dbError) {
+        console.error('Error deleting image from database:', dbError);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting offer image:', error);
+      return false;
+    }
+  }
+};
+
+// Trade Meetings API
+export const tradeMeetingsApi = {
+  // Create a new trade meeting
+  async create(meetingData: {
+    offerId: string;
+    buyerId: string;
+    sellerId: string;
+    buyerLat: number;
+    buyerLng: number;
+    sellerLat: number;
+    sellerLng: number;
+    distanceKm: number;
+  }): Promise<string | null> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { data, error } = await supabase
+        .from('trade_meetings')
+        .insert({
+          offer_id: meetingData.offerId,
+          buyer_id: meetingData.buyerId,
+          seller_id: meetingData.sellerId,
+          buyer_lat: meetingData.buyerLat,
+          buyer_lng: meetingData.buyerLng,
+          seller_lat: meetingData.sellerLat,
+          seller_lng: meetingData.sellerLng,
+          distance_km: meetingData.distanceKm,
+        })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+      return data?.id || null;
+    } catch (error) {
+      console.error('Error creating trade meeting:', error);
+      return null;
+    }
+  },
+
+  // Get trade meeting by offer ID
+  async getByOfferId(offerId: string): Promise<TradeMeeting | null> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { data, error } = await supabase
+        .from('trade_meetings')
+        .select('*')
+        .eq('offer_id', offerId)
+        .single();
+
+      if (error) throw error;
+      return data;
+      } catch (error) {
+        console.error('Error getting trade meeting:', error);
+        return null;
+      }
+    },
+
+  // Update trade meeting
+  async update(meetingId: string, updates: {
+    meetingLocation?: string;
+    meetingAddress?: string;
+    meetingLat?: number;
+    meetingLng?: number;
+    meetingTime?: string;
+    status?: 'pending' | 'confirmed' | 'completed' | 'cancelled';
+  }): Promise<boolean> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { error } = await supabase
+        .from('trade_meetings')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', meetingId);
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error updating trade meeting:', error);
+      return false;
+    }
+  },
+
+  // Get user's trade meetings
+  async getUserMeetings(): Promise<TradeMeeting[]> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { data, error } = await supabase
+        .from('trade_meetings')
+        .select('*')
+        .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error getting user meetings:', error);
+      return [];
+    }
+  }
+};

@@ -240,6 +240,125 @@ CREATE POLICY "Users can view all ratings" ON public.user_ratings FOR SELECT USI
 CREATE POLICY "Users can insert ratings" ON public.user_ratings FOR INSERT WITH CHECK (auth.uid() = rater_id);
 CREATE POLICY "Users can update own ratings" ON public.user_ratings FOR UPDATE USING (auth.uid() = rater_id);
 
+-- Offers table
+CREATE TABLE IF NOT EXISTS public.offers (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  item_id UUID NOT NULL REFERENCES public.items(id) ON DELETE CASCADE,
+  buyer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  seller_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  offer_message TEXT,
+  offered_items TEXT[], -- Array of item descriptions the buyer is offering
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined', 'withdrawn')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Trade meetings table for coordinating meetups
+CREATE TABLE IF NOT EXISTS public.trade_meetings (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  offer_id UUID NOT NULL REFERENCES public.offers(id) ON DELETE CASCADE,
+  buyer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  seller_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  meeting_location TEXT,
+  meeting_address TEXT,
+  meeting_lat DECIMAL(10, 8),
+  meeting_lng DECIMAL(11, 8),
+  meeting_time TIMESTAMP WITH TIME ZONE,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'completed', 'cancelled')),
+  buyer_lat DECIMAL(10, 8),
+  buyer_lng DECIMAL(11, 8),
+  seller_lat DECIMAL(10, 8),
+  seller_lng DECIMAL(11, 8),
+  distance_km DECIMAL(8, 2),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Offer images table
+CREATE TABLE IF NOT EXISTS public.offer_images (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  offer_id UUID NOT NULL REFERENCES public.offers(id) ON DELETE CASCADE,
+  image_url TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  order_index INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS on offers
+ALTER TABLE public.offers ENABLE ROW LEVEL SECURITY;
+
+-- Offers policies
+CREATE POLICY "Users can view offers they sent or received" ON public.offers 
+  FOR SELECT USING (auth.uid() = buyer_id OR auth.uid() = seller_id);
+
+CREATE POLICY "Users can insert their own offers" ON public.offers 
+  FOR INSERT WITH CHECK (auth.uid() = buyer_id);
+
+CREATE POLICY "Users can update offers they sent or received" ON public.offers 
+  FOR UPDATE USING (auth.uid() = buyer_id OR auth.uid() = seller_id);
+
+CREATE POLICY "Users can delete offers they sent" ON public.offers 
+  FOR DELETE USING (auth.uid() = buyer_id);
+
+-- Enable RLS on trade_meetings
+ALTER TABLE public.trade_meetings ENABLE ROW LEVEL SECURITY;
+
+-- Trade meetings policies
+CREATE POLICY "Users can view trade meetings they're involved in" ON public.trade_meetings 
+  FOR SELECT USING (auth.uid() = buyer_id OR auth.uid() = seller_id);
+
+CREATE POLICY "Users can insert trade meetings they're involved in" ON public.trade_meetings 
+  FOR INSERT WITH CHECK (auth.uid() = buyer_id OR auth.uid() = seller_id);
+
+CREATE POLICY "Users can update trade meetings they're involved in" ON public.trade_meetings 
+  FOR UPDATE USING (auth.uid() = buyer_id OR auth.uid() = seller_id);
+
+CREATE POLICY "Users can delete trade meetings they're involved in" ON public.trade_meetings 
+  FOR DELETE USING (auth.uid() = buyer_id OR auth.uid() = seller_id);
+
+-- Enable RLS on offer_images
+ALTER TABLE public.offer_images ENABLE ROW LEVEL SECURITY;
+
+-- Offer images policies
+CREATE POLICY "Users can view offer images for offers they sent or received" ON public.offer_images 
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.offers 
+      WHERE id = offer_id 
+      AND (buyer_id = auth.uid() OR seller_id = auth.uid())
+    )
+  );
+
+CREATE POLICY "Users can insert offer images for their own offers" ON public.offer_images 
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.offers 
+      WHERE id = offer_id 
+      AND buyer_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can delete offer images for their own offers" ON public.offer_images 
+  FOR DELETE USING (
+    EXISTS (
+      SELECT 1 FROM public.offers 
+      WHERE id = offer_id 
+      AND buyer_id = auth.uid()
+    )
+  );
+
+-- Create index for better performance
+CREATE INDEX IF NOT EXISTS idx_offers_item_id ON public.offers(item_id);
+CREATE INDEX IF NOT EXISTS idx_offers_buyer_id ON public.offers(buyer_id);
+CREATE INDEX IF NOT EXISTS idx_offers_seller_id ON public.offers(seller_id);
+CREATE INDEX IF NOT EXISTS idx_offers_status ON public.offers(status);
+CREATE INDEX IF NOT EXISTS idx_trade_meetings_offer_id ON public.trade_meetings(offer_id);
+CREATE INDEX IF NOT EXISTS idx_trade_meetings_buyer_id ON public.trade_meetings(buyer_id);
+CREATE INDEX IF NOT EXISTS idx_trade_meetings_seller_id ON public.trade_meetings(seller_id);
+CREATE INDEX IF NOT EXISTS idx_trade_meetings_status ON public.trade_meetings(status);
+CREATE INDEX IF NOT EXISTS idx_offer_images_offer_id ON public.offer_images(offer_id);
+CREATE INDEX IF NOT EXISTS idx_offer_images_order_index ON public.offer_images(order_index);
+
 -- Functions for automatic timestamps
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$

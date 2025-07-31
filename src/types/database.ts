@@ -286,6 +286,126 @@ export interface Database {
           created_at?: string
         }
       }
+      offers: {
+        Row: {
+          id: string
+          item_id: string
+          buyer_id: string
+          seller_id: string
+          offer_message: string | null
+          offered_items: string[] | null
+          status: 'pending' | 'accepted' | 'declined' | 'withdrawn'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          item_id: string
+          buyer_id: string
+          seller_id: string
+          offer_message?: string | null
+          offered_items?: string[] | null
+          status?: 'pending' | 'accepted' | 'declined' | 'withdrawn'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          item_id?: string
+          buyer_id?: string
+          seller_id?: string
+          offer_message?: string | null
+          offered_items?: string[] | null
+          status?: 'pending' | 'accepted' | 'declined' | 'withdrawn'
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      offer_images: {
+        Row: {
+          id: string
+          offer_id: string
+          image_url: string
+          filename: string
+          order_index: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          offer_id: string
+          image_url: string
+          filename: string
+          order_index?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          offer_id?: string
+          image_url?: string
+          filename?: string
+          order_index?: number
+          created_at?: string
+        }
+      }
+      trade_meetings: {
+        Row: {
+          id: string
+          offer_id: string
+          buyer_id: string
+          seller_id: string
+          meeting_location: string | null
+          meeting_address: string | null
+          meeting_lat: number | null
+          meeting_lng: number | null
+          meeting_time: string | null
+          status: 'pending' | 'confirmed' | 'completed' | 'cancelled'
+          buyer_lat: number | null
+          buyer_lng: number | null
+          seller_lat: number | null
+          seller_lng: number | null
+          distance_km: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          offer_id: string
+          buyer_id: string
+          seller_id: string
+          meeting_location?: string | null
+          meeting_address?: string | null
+          meeting_lat?: number | null
+          meeting_lng?: number | null
+          meeting_time?: string | null
+          status?: 'pending' | 'confirmed' | 'completed' | 'cancelled'
+          buyer_lat?: number | null
+          buyer_lng?: number | null
+          seller_lat?: number | null
+          seller_lng?: number | null
+          distance_km?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          offer_id?: string
+          buyer_id?: string
+          seller_id?: string
+          meeting_location?: string | null
+          meeting_address?: string | null
+          meeting_lat?: number | null
+          meeting_lng?: number | null
+          meeting_time?: string | null
+          status?: 'pending' | 'confirmed' | 'completed' | 'cancelled'
+          buyer_lat?: number | null
+          buyer_lng?: number | null
+          seller_lat?: number | null
+          seller_lng?: number | null
+          distance_km?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -310,6 +430,15 @@ export type Conversation = Database['public']['Tables']['conversations']['Row']
 export type Message = Database['public']['Tables']['messages']['Row']
 export type Favorite = Database['public']['Tables']['favorites']['Row']
 export type UserRating = Database['public']['Tables']['user_ratings']['Row']
+export type Offer = Database['public']['Tables']['offers']['Row']
+export type OfferInsert = Database['public']['Tables']['offers']['Insert']
+export type OfferUpdate = Database['public']['Tables']['offers']['Update']
+export type OfferImage = Database['public']['Tables']['offer_images']['Row']
+export type OfferImageInsert = Database['public']['Tables']['offer_images']['Insert']
+export type OfferImageUpdate = Database['public']['Tables']['offer_images']['Update']
+export type TradeMeeting = Database['public']['Tables']['trade_meetings']['Row']
+export type TradeMeetingInsert = Database['public']['Tables']['trade_meetings']['Insert']
+export type TradeMeetingUpdate = Database['public']['Tables']['trade_meetings']['Update']
 
 // Extended types with joins
 export interface ItemWithDetails extends Item {
@@ -337,4 +466,11 @@ export interface MessageWithDetails extends Message {
   sender: Profile
   receiver: Profile
   conversation: Conversation | null
+}
+
+export interface OfferWithDetails extends Offer {
+  item?: ItemWithDetails
+  buyer?: Profile
+  seller?: Profile
+  images?: OfferImage[]
 } 

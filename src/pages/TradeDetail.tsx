@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,10 +23,12 @@ import {
   Loader2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { itemsApi, favoritesApi } from "@/lib/api";
+import { itemsApi, favoritesApi, offersApi } from "@/lib/api";
 import { ItemWithDetails } from "@/types/database";
 import { supabase } from "@/lib/supabase";
 import { Chat } from "@/components/Chat";
+import { MakeOfferModal } from "@/components/MakeOfferModal";
+import { checkAuthAndRedirect } from "@/lib/utils";
 
 interface TradeDetail {
   id: string;
@@ -84,6 +86,7 @@ const mockTradeDetail: TradeDetail = {
 
 export default function TradeDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [selectedImage, setSelectedImage] = useState(0);
   const [isLiked, setIsLiked] = useState(false);
   const [item, setItem] = useState<ItemWithDetails | null>(null);
@@ -92,6 +95,8 @@ export default function TradeDetail() {
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [showMakeOffer, setShowMakeOffer] = useState(false);
+  const [hasUserOffered, setHasUserOffered] = useState(false);
   const { toast } = useToast();
 
   // Fetch item data and check ownership
@@ -163,8 +168,24 @@ export default function TradeDetail() {
     };
   }, [item]);
 
+  // Check if user has already made an offer
+  useEffect(() => {
+    const checkUserOffer = async () => {
+      if (!item || !currentUser) return;
+      
+      const hasOffered = await offersApi.hasUserOffered(item.id);
+      setHasUserOffered(hasOffered);
+    };
+
+    checkUserOffer();
+  }, [item, currentUser]);
+
   const handleLike = async () => {
     if (!item) return;
+    
+    // Check authentication before allowing like
+    const isAuthenticated = await checkAuthAndRedirect(navigate);
+    if (!isAuthenticated) return;
     
     try {
       if (isLiked) {
@@ -207,6 +228,21 @@ export default function TradeDetail() {
     });
   };
 
+  const handleContactOwner = async () => {
+    // Check authentication before allowing chat
+    const isAuthenticated = await checkAuthAndRedirect(navigate);
+    if (!isAuthenticated) return;
+    
+    setShowChat(true);
+  };
+
+  const handleMakeOffer = async () => {
+    // Check authentication before allowing offer
+    const isAuthenticated = await checkAuthAndRedirect(navigate);
+    if (!isAuthenticated) return;
+    
+    setShowMakeOffer(true);
+  };
 
 
   const formatTimeAgo = (date: Date) => {
@@ -468,15 +504,25 @@ export default function TradeDetail() {
                     <Button 
                       className="w-full" 
                       variant="default"
-                      onClick={() => setShowChat(true)}
+                      onClick={handleContactOwner}
                     >
                       <MessageCircle className="h-4 w-4 mr-2" />
                       Contact Owner
                     </Button>
-                    <Button variant="outline" className="w-full">
+                    <Button 
+                      variant="outline" 
+                      className="w-full"
+                      onClick={handleMakeOffer}
+                      disabled={hasUserOffered}
+                    >
                       <Heart className="h-4 w-4 mr-2" />
-                      Make Offer
+                      {hasUserOffered ? "Offer Already Sent" : "Make Offer"}
                     </Button>
+                    {hasUserOffered && (
+                      <p className="text-xs text-muted-foreground text-center">
+                        You've already made an offer on this item
+                      </p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -508,6 +554,18 @@ export default function TradeDetail() {
           itemId={item.id}
           receiverId={item.user_id}
           onClose={() => setShowChat(false)}
+        />
+      )}
+
+      {/* Make Offer Modal */}
+      {showMakeOffer && item && (
+        <MakeOfferModal
+          isOpen={showMakeOffer}
+          onClose={() => setShowMakeOffer(false)}
+          itemId={item.id}
+          sellerId={item.user_id}
+          itemTitle={item.title}
+          wantedItems={item.wanted_items?.map(wi => wi.description) || []}
         />
       )}
     </div>

@@ -7,19 +7,31 @@ import {
   ArrowLeft,
   Loader2
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { favoritesApi } from "@/lib/api";
 import { ItemWithDetails } from "@/types/database";
+import { checkAuthAndRedirect } from "@/lib/utils";
 
 export default function Favorites() {
   const [favorites, setFavorites] = useState<ItemWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const handleUnfavorite = (itemId: string) => {
     setFavorites(prev => prev.filter(item => item.id !== itemId));
   };
+
+  // Check authentication on component mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const isAuthenticated = await checkAuthAndRedirect(navigate);
+      if (!isAuthenticated) return;
+    };
+    
+    checkAuth();
+  }, [navigate]);
 
   // Get current user
   useEffect(() => {
